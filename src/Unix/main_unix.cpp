@@ -386,6 +386,15 @@ extern "C" {
 }
 #endif
 
+#ifdef ANDROIDSDL
+int main(int argc, char **argv);
+extern "C" {
+int SDL_main(int argc, char **argv) {
+	return main(argc, argv);
+}
+}
+#endif
+
 int main(int argc, char **argv)
 {
 #ifdef GUICHAN_GUI

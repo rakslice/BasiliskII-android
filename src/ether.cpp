@@ -581,4 +581,7 @@ EthernetPacket::~EthernetPacket()
 		bug("WARNING: Nested allocation of ethernet packets!\n");
 	}
 }
+#else
+static void EtherResetCachedAllocation(void) {
+}
 #endif

@@ -402,7 +402,7 @@ int slirp_select_fill(int *pnfds,
     uint32_t timeout;
 
     if (QTAILQ_EMPTY(&slirp_instances)) {
-        return;
+        return 0;
     }
 
     /*

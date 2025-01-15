@@ -560,6 +560,8 @@ namespace widgets
     
     if(lastSelectedIndex >= 0 && lastSelectedIndex < dirList.getNumberOfElements())
       listBox->setSelected(lastSelectedIndex);
+
+    return 0;
   }
   
 

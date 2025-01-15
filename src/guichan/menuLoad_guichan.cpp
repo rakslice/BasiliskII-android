@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <dirent.h>
 
+#include <list>
+
 #if defined(WIN32)
 #define realpath(N,R) _fullpath((R),(N),_MAX_PATH)
 #endif
@@ -125,7 +127,6 @@ namespace widgets
   void show_settings(void);
   static void unraise_loadMenu_guichan();
   static void checkfilename (char *currentfilename);
-  extern std::string menuFileDisk[4];
   extern std::string menu_extfs;
   extern std::string menu_rom;
   
@@ -589,14 +590,7 @@ namespace widgets
   	{
   	  if ((menu_load_type == MENU_ADD_VOLUME) && confirmselection)
   	  {
-		  for (int i=0; i<4; i++)
-		  {
-			if (menuFileDisk[i]=="")
-			{
-				menuFileDisk[i]=currentfilename;
-				break;
-			}
-		  }
+			menuFileDiskList.push_back(currentfilename);
   	  }
 	  else if ((menu_load_type == MENU_SELECT_ROM) && confirmselection)
   	  {

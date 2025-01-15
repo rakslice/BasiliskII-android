@@ -7,3 +7,7 @@
 extern int current_drive;
 extern char launchDir[300];
 extern char currentDir[300];
+
+namespace widgets {
+    extern std::list<std::string> menuFileDiskList;
+}

@@ -21,12 +21,13 @@
 #include <fstream>
 #include <string>
 #include <cstring>
+#include <list>
 //#include "conio.h"
 
 using namespace std;
 namespace widgets
 {
-	std::string menuFileDisk[4];
+	std::list<std::string> menuFileDiskList;
 	string menu_extfs;
 	string menu_seriala;
 	string menu_serialb;
@@ -65,8 +66,6 @@ namespace widgets
 
 void defConfig()
 {
-	for (int i=0; i<4; i++)
-		menuFileDisk[i]="";
 	menu_extfs="/";
 	menu_seriala="/dev/ttyS0";
 	menu_serialb="/dev/ttyS1";
@@ -109,8 +108,6 @@ void readConfig()
 	char char1,char2,char3,char4;
 	string prev_string;
 	int lenght;
-	int disk_n;
-	disk_n=0;
 	defConfig();
 	ifstream myfile;
 	myfile.open(prefsName);
@@ -123,11 +120,8 @@ void readConfig()
 	{
 		myfile>>readed_string;
 		strcpy(current_string,readed_string);
-		if (prev_string==string("disk") && disk_n < 4)
-		{
-			menuFileDisk[disk_n]=current_string;
-			disk_n++;
-		}
+		if (prev_string==string("disk"))
+			menuFileDiskList.push_back(current_string);
 		if (prev_string==string("extfs"))
 			menu_extfs=current_string;
 		if (prev_string==string("seriala"))
@@ -203,14 +197,11 @@ void writeConfig()
 	ofstream myfile;
 	myfile.open(prefsName);
 	strcpy(saved_string,"");
-	for (int i=0; i<4; i++)
+	for (std::list<std::string>::iterator i = menuFileDiskList.begin(); i != menuFileDiskList.end(); i++)
 	{
-		if (menuFileDisk[i]!="")
-		{
-			strcat(saved_string,"disk ");
-			strcat(saved_string,menuFileDisk[i].c_str());
-			strcat(saved_string,"\n");
-		}
+		strcat(saved_string,"disk ");
+		strcat(saved_string,i->c_str());
+		strcat(saved_string,"\n");
 	}
 	strcat(saved_string,"extfs ");
 	strcat(saved_string,menu_extfs.c_str());

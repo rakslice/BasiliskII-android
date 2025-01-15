@@ -11,9 +11,10 @@
 #include <string>
 #include "rw_config.h"
 
+#include <list>
+
 namespace widgets
 {
-  extern std::string menuFileDisk[];
   extern std::string menu_extfs;
   extern std::string menu_nocdrom;
   void run_menuLoad_guichan(char *curr_path, int aLoadType);
@@ -40,15 +41,28 @@ namespace widgets
     public:
         int getNumberOfElements()
         {
-            return 4;
+            return menuFileDiskList.size();
+        }
+
+        std::list<std::string>::iterator iteratorByPos(int i) {
+          std::list<std::string>::iterator pos = menuFileDiskList.begin();
+          while (i > 0 && pos != menuFileDiskList.end()) {
+            i--;
+            pos++;
+          }
+          return pos;
         }
 
         std::string getElementAt(int i)
         {
-	    if (menuFileDisk[i]!="")
-	      return menuFileDisk[i];
-	    else
-	      return "                                  ";
+          std::list<std::string>::iterator pos = iteratorByPos(i);
+          return (pos != menuFileDiskList.end())? *pos : "                                  ";
+        }
+
+        void remove(int i) {
+          std::list<std::string>::iterator pos = iteratorByPos(i);
+          if (pos != menuFileDiskList.end())
+            menuFileDiskList.erase(pos);
         }
     };
     VolumeListModel volumeListModel;
@@ -75,27 +89,8 @@ namespace widgets
 	    if (actionEvent.getSource() == button_remove)
 	    {
 	      	activateAfterClose = button_remove;
-		int selectedItem;
-		selectedItem=volumeListBox->getSelected();
-		menuFileDisk[selectedItem]="";
-		for (int i=3; i>0; i--)
-		{
-			if ((menuFileDisk[i-1]=="") && (menuFileDisk[i]!=""))
-			{
-				menuFileDisk[i-1]=menuFileDisk[i];
-				menuFileDisk[i]="";
-			}
-		}
-		for (int i=0; i<3; i++)
-		{
-			if ((menuFileDisk[i]=="") && (menuFileDisk[i+1]!=""))
-			{
-				menuFileDisk[i]=menuFileDisk[i+1];
-				menuFileDisk[i+1]="";
-			}
-		}
-			
-  	    }
+          volumeListModel.remove(volumeListBox->getSelected());
+      }
       }
   };
   RemoveButtonActionListener* removeButtonActionListener;

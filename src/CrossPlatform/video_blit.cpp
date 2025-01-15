@@ -577,9 +577,26 @@ bool Screen_blitter_init(VisualFormat const & visual_format, bool native_byte_or
 		}
 	}
 #else
-	// The UAE memory handlers will blit correctly
-	// --> no need for specialised blitters here
-	Screen_blit = Blit_Copy_Raw;
+	if (use_sdl_video && 8 > mac_depth && 8 == visual_format.depth) {
+		switch (mac_depth) {
+			case 1:
+				Screen_blit = Blit_Expand_1_To_8;
+				break;
+			case 2:
+				Screen_blit = Blit_Expand_2_To_8;
+				break;
+			case 4:
+				Screen_blit = Blit_Expand_4_To_8;
+				break;
+			default:
+				Screen_blit = Blit_Copy_Raw;
+				break;
+		}
+	} else {
+		// The UAE memory handlers will blit correctly
+		// --> no need for specialised blitters here
+		Screen_blit = Blit_Copy_Raw;
+	}
 #endif
 	
 	// If the blitter simply reduces to a copy, we don't need VOSF in DGA mode

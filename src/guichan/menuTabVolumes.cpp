@@ -32,6 +32,8 @@ namespace widgets
   gcn::Button* button_add;
   gcn::Button* button_create;
   gcn::Button* button_remove;
+  gcn::Button* button_move_up;
+  gcn::Button* button_move_down;
   gcn::Button* button_hostfs;
   gcn::TextField* textField_hostfs;
   gcn::CheckBox* checkBox_nocdrom; 
@@ -45,6 +47,7 @@ namespace widgets
         }
 
         std::list<std::string>::iterator iteratorByPos(int i) {
+          if (i < 0) return menuFileDiskList.end();
           std::list<std::string>::iterator pos = menuFileDiskList.begin();
           while (i > 0 && pos != menuFileDiskList.end()) {
             i--;
@@ -63,6 +66,22 @@ namespace widgets
           std::list<std::string>::iterator pos = iteratorByPos(i);
           if (pos != menuFileDiskList.end())
             menuFileDiskList.erase(pos);
+        }
+
+        bool move(int i, int direction) {
+          std::list<std::string>::iterator cur, other;
+
+          if (i == 0 && direction == -1) return false;
+          cur = iteratorByPos(i);
+          if (cur == menuFileDiskList.end()) return false;
+          other = cur;
+          if (direction > 0)
+            other++;
+          else
+            other--;
+          if (other == menuFileDiskList.end()) return false;
+          std::swap(*cur, *other);
+          return true;
         }
     };
     VolumeListModel volumeListModel;
@@ -94,6 +113,36 @@ namespace widgets
       }
   };
   RemoveButtonActionListener* removeButtonActionListener;
+
+  class MoveUpButtonActionListener : public gcn::ActionListener
+  {
+    public:
+      void action(const gcn::ActionEvent& actionEvent)
+      {
+	    if (actionEvent.getSource() == button_move_up)
+	    {
+          int sel = volumeListBox->getSelected();
+          if (volumeListModel.move(sel, -1))
+            volumeListBox->setSelected(sel - 1);
+      }
+      }
+  };
+  MoveUpButtonActionListener* moveUpButtonActionListener;
+
+  class MoveDownButtonActionListener : public gcn::ActionListener
+  {
+    public:
+      void action(const gcn::ActionEvent& actionEvent)
+      {
+	    if (actionEvent.getSource() == button_move_down)
+	    {
+          int sel = volumeListBox->getSelected();
+          if (volumeListModel.move(sel, 1))
+            volumeListBox->setSelected(sel + 1);
+      }
+      }
+  };
+  MoveDownButtonActionListener* moveDownButtonActionListener;
 
   class HostfsButtonActionListener : public gcn::ActionListener
   {
@@ -145,16 +194,33 @@ namespace widgets
     button_add->addActionListener(addButtonActionListener);
     button_create = new gcn::Button("Create");
     button_create->setSize(80,30);
-    button_create->setPosition(255,125);
+    button_create->setPosition(125,125);
     button_create->setBaseColor(baseCol);
     button_create->setId("Create");
     button_remove = new gcn::Button("Remove");
     button_remove->setSize(80,30);
-    button_remove->setPosition(500,125);
+    button_remove->setPosition(255,125);
     button_remove->setBaseColor(baseCol);
     button_remove->setId("Remove");
     removeButtonActionListener = new RemoveButtonActionListener();
     button_remove->addActionListener(removeButtonActionListener);
+    button_move_up = new gcn::Button("Move Up");
+    button_move_up->setSize(80,30);
+    button_move_up->setPosition(380,125);
+    button_move_up->setBaseColor(baseCol);
+    button_move_up->setId("MoveUp");
+    //button_move_up->setEnabled(false);
+    moveUpButtonActionListener = new MoveUpButtonActionListener();
+    button_move_up->addActionListener(moveUpButtonActionListener);
+
+    button_move_down = new gcn::Button("Move Down");
+    button_move_down->setSize(80,30);
+    button_move_down->setPosition(500,125);
+    button_move_down->setBaseColor(baseCol);
+    button_move_down->setId("MoveUp");
+    //button_move_down->setEnabled(false);
+    moveDownButtonActionListener = new MoveDownButtonActionListener();
+    button_move_down->addActionListener(moveDownButtonActionListener);
 
     button_hostfs = new gcn::Button("HostFS Dir");
     button_hostfs->setSize(85,30);
@@ -183,6 +249,8 @@ namespace widgets
     tab_volumes->add(button_add);
     tab_volumes->add(button_remove);
     tab_volumes->add(button_create);
+    tab_volumes->add(button_move_up);
+    tab_volumes->add(button_move_down);
     tab_volumes->add(button_hostfs);
     tab_volumes->add(textField_hostfs);
     tab_volumes->add(checkBox_nocdrom);
@@ -199,6 +267,8 @@ namespace widgets
     delete button_add;
     delete button_create;
     delete button_remove;
+    delete button_move_down;
+    delete button_move_up;
     delete button_hostfs;
     delete textField_hostfs;
     delete checkBox_nocdrom; 
@@ -207,6 +277,8 @@ namespace widgets
     delete removeButtonActionListener;
     delete hostfsButtonActionListener;
     delete nocdromActionListener;
+    delete moveUpButtonActionListener;
+    delete moveDownButtonActionListener;
   }
 
   void show_settings_TabVolumes()

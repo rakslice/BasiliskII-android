@@ -99,6 +99,10 @@ extern void kprintf(const char *, ...);
 #endif
 #define bug kprintf
 
+#elif defined(ANDROIDSDL)
+#include <android/log.h>
+
+#define bug(form, ...) __android_log_print(ANDROID_LOG_ERROR, "net.cebix.basilisk", "bug() output %s:%d: " form, __FILE__, __LINE__, ## __VA_ARGS__)
 #else
 
 // Other systems just print it to stdout

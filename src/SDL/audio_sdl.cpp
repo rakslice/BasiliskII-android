@@ -89,7 +89,7 @@ static bool open_sdl_audio(void)
 	SDL_AudioSpec audio_spec;
 	audio_spec.freq = audio_sample_rates[audio_sample_rate_index] >> 16;
 #ifdef ANDROID
-	audio_spec.format = (audio_sample_sizes[audio_sample_size_index] == 8) ? AUDIO_S8 : AUDIO_S16;	
+	audio_spec.format = (audio_sample_sizes[audio_sample_size_index] == 8) ? AUDIO_U8 : AUDIO_S16;
 #else
 	audio_spec.format = (audio_sample_sizes[audio_sample_size_index] == 8) ? AUDIO_U8 : AUDIO_S16MSB;
 #endif
@@ -218,19 +218,49 @@ static void stream_func(void *arg, uint8 *stream, int stream_len)
 		// Get size of audio data
 		uint32 apple_stream_info = ReadMacInt32(audio_data + adatStreamInfo);
 		if (apple_stream_info && !audio_mute) {
-			int work_size = ReadMacInt32(apple_stream_info + scd_sampleCount) * (AudioStatus.sample_size >> 3) * AudioStatus.channels;
+			uint16 source_channels = ReadMacInt16(apple_stream_info + scd_numChannels);
+
+			int work_size = ReadMacInt32(apple_stream_info + scd_sampleCount) * (AudioStatus.sample_size >> 3) * source_channels;
 			D(bug("stream: work_size %d\n", work_size));
-			if (work_size > stream_len)
-				work_size = stream_len;
-			if (work_size == 0)
+			if (work_size == 0 || stream_len == 0)
 				goto silence;
 
-			// Send data to audio device
-			Mac2Host_memcpy(audio_mix_buf, ReadMacInt32(apple_stream_info + scd_buffer), work_size);
-			memset((uint8 *)stream, silence_byte, stream_len);
-			SDL_MixAudio(stream, audio_mix_buf, work_size, audio_volume);
+#ifdef ANDROID
+			uint16 dest_format = (AudioStatus.sample_size == 8)? AUDIO_U8 : AUDIO_S16;
+#else
+			uint16 dest_format = (AudioStatus.sample_size == 8)? AUDIO_U8 : AUDIO_S16MSB;
+#endif
+			uint16 source_format = (AudioStatus.sample_size == 8)? AUDIO_U8 : AUDIO_S16MSB;
+			if (dest_format != source_format || AudioStatus.channels != source_channels) {
+				// we need to convert
+				int output_work_size = work_size * AudioStatus.channels / source_channels;
+				if (output_work_size > stream_len) {
+					output_work_size = stream_len;
+					work_size = output_work_size * source_channels / AudioStatus.channels;
+				}
+				// Send data to audio device
+				Mac2Host_memcpy(audio_mix_buf, ReadMacInt32(apple_stream_info + scd_buffer), work_size);
+				memset((uint8 *)stream, silence_byte, stream_len);
 
-			D(bug("stream: data written\n"));
+				int rate = AudioStatus.sample_rate >> 16;
+				SDL_AudioCVT cvt;
+				if (SDL_BuildAudioCVT(&cvt, source_format, source_channels, rate, dest_format, AudioStatus.channels, rate) == 1) {
+					cvt.buf = audio_mix_buf;
+					cvt.len = work_size;
+					if (SDL_ConvertAudio(&cvt) == 0) {
+						SDL_MixAudio(stream, audio_mix_buf, output_work_size, audio_volume);
+						D(bug("stream: data written\n"));
+					}
+				}
+			} else {
+				if (work_size > stream_len)
+					work_size = stream_len;
+				// Send data to audio device
+				Mac2Host_memcpy(audio_mix_buf, ReadMacInt32(apple_stream_info + scd_buffer), work_size);
+				memset((uint8 *)stream, silence_byte, stream_len);
+				SDL_MixAudio(stream, audio_mix_buf, work_size, audio_volume);
+				D(bug("stream: data written\n"));
+			}
 
 		} else
 			goto silence;

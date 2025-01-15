@@ -35,6 +35,9 @@
 #define USE_POLL 0
 #else
 #define USE_POLL 1
+  #ifndef HAVE_PTHREAD_CANCEL
+  #include <sys/eventfd.h>
+  #endif
 #endif
 
 // Define to let the slirp library determine the right timeout for select()
@@ -141,6 +144,13 @@ static void ether_do_interrupt(void);
 static void slirp_add_redirs();
 static int slirp_add_redir(const char *redir_str);
 
+#ifndef HAVE_PTHREAD_CANCEL
+  static int slirp_thread_run = false;
+  static int ether_thread_run = false;
+  #if USE_POLL
+    static void cancel_receive_func_poll();
+  #endif
+#endif
 
 /*
  *  Start packet reception thread
@@ -154,6 +164,9 @@ static bool start_thread(void)
 	}
 
 	Set_pthread_attr(&ether_thread_attr, 1);
+	#ifndef HAVE_PTHREAD_CANCEL
+	ether_thread_run = true;
+	#endif
 	thread_active = (pthread_create(&ether_thread, &ether_thread_attr, receive_func, NULL) == 0);
 	if (!thread_active) {
 		printf("WARNING: Cannot start Ethernet thread");
@@ -162,6 +175,9 @@ static bool start_thread(void)
 
 #ifdef HAVE_SLIRP
 	if (net_if_type == NET_IF_SLIRP) {
+		#ifndef HAVE_PTHREAD_CANCEL
+		slirp_thread_run = true;
+		#endif
 		slirp_thread_active = (pthread_create(&slirp_thread, NULL, slirp_receive_func, NULL) == 0);
 		if (!slirp_thread_active) {
 			printf("WARNING: Cannot start slirp reception thread\n");
@@ -183,8 +199,12 @@ static void stop_thread(void)
 #ifdef HAVE_SLIRP
 	if (slirp_thread_active) {
 #ifdef HAVE_PTHREAD_CANCEL
+		D(bug("cancel slirp thread\n"));
 		pthread_cancel(slirp_thread);
+#else
+		slirp_thread_run = false;
 #endif
+		D(bug("join slirp thread\n"));
 		pthread_join(slirp_thread, NULL);
 		slirp_thread_active = false;
 	}
@@ -192,8 +212,16 @@ static void stop_thread(void)
 
 	if (thread_active) {
 #ifdef HAVE_PTHREAD_CANCEL
+		D(bug("cancel ether thread\n"));
 		pthread_cancel(ether_thread);
+#else
+		ether_thread_run = false;		
+#if USE_POLL
+		D(bug("cancel receive func\n"));
+		cancel_receive_func_poll();
 #endif
+#endif
+		D(bug("join ether thread\n"));
 		pthread_join(ether_thread, NULL);
 		sem_destroy(&int_ack);
 		thread_active = false;
@@ -856,6 +884,9 @@ void *slirp_receive_func(void *arg)
 		// This seems to be the case on MacOS X 10.2
 		pthread_testcancel();
 #endif
+#ifndef HAVE_PTHREAD_CANCEL
+		if (!slirp_thread_run) break;
+#endif
 	}
 	return NULL;
 }
@@ -871,18 +902,37 @@ void slirp_output(void *opaque, const uint8 *packet, int len)
 #endif
 
 
+#if USE_POLL && !defined (HAVE_PTHREAD_CANCEL)
+static int receive_func_eventfd;
+static void cancel_receive_func_poll()
+{
+	D(bug("writing to eventfd to complete final poll\n"));
+	eventfd_write(receive_func_eventfd, 1);
+}
+#endif
+
 /*
  *  Packet reception thread
  */
 
 static void *receive_func(void *arg)
 {
+#if USE_POLL && !defined (HAVE_PTHREAD_CANCEL)
+	receive_func_eventfd = eventfd(0, 0);
+	D(bug("receive func eventfd is %d\n", receive_func_eventfd));
+#endif
 	for (;;) {
 
 		// Wait for packets to arrive
 #if USE_POLL
+  #ifdef HAVE_PTHREAD_CANCEL
 		struct pollfd pf = {fd, POLLIN, 0};
 		int res = poll(&pf, 1, -1);
+  #else
+		struct pollfd pf[] = {{fd, POLLIN, 0}, {receive_func_eventfd, POLLIN, 0}};
+		int res = poll(pf, 2, -1);
+		if (!ether_thread_run) break;
+  #endif
 #else
 		fd_set rfds;
 		FD_ZERO(&rfds);
@@ -893,6 +943,9 @@ static void *receive_func(void *arg)
 		int res = select(fd + 1, &rfds, NULL, NULL, &tv);
 #ifdef HAVE_PTHREAD_TESTCANCEL
 		pthread_testcancel();
+#endif
+#ifndef HAVE_PTHREAD_CANCEL
+		if (!ether_thread_run) break;
 #endif
 		if (res == 0 || (res == -1 && errno == EINTR))
 			continue;

@@ -194,6 +194,12 @@ extern void SysMountFirstFloppy(void);
  *  Framebuffer allocation routines
  */
 
+/* Fixed mmap defeats normal precautions about not overlapping your program memory.
+ * These using fixed mmap shenanigans always are a hair's breadth away from just overlapping another malloc
+ * and causing severe memory corruption. We can't just release the framebuffer for a length of time and
+ * expect things not to go sideways.
+ */
+
 static void *vm_acquire_framebuffer(uint32 size)
 {
 	// always try to reallocate framebuffer at the same address
@@ -707,8 +713,16 @@ void driver_base::init()
 	if (!use_vosf) {
 		// Allocate memory for frame buffer
 		the_buffer_size = (aligned_height + 2) * s->pitch;
-		the_buffer_copy = (uint8 *)calloc(1, the_buffer_size);
+		// due to mmap MAP_FIXED shenanigans it is extremely important that vm_acquire_framebuffer
+		// happens before other allocations
+#if DIRECT_ADDRESSING || REAL_ADDRESSING
 		the_buffer = (uint8 *)vm_acquire_framebuffer(the_buffer_size);
+#else
+		the_buffer = (uint8 *)calloc(1, the_buffer_size);
+		if (the_buffer == NULL)
+			the_buffer = (uint8 *)VM_MAP_FAILED;
+#endif
+		the_buffer_copy = (uint8 *)calloc(1, the_buffer_size);
 		D(bug("the_buffer = %p, the_buffer_copy = %p\n", the_buffer, the_buffer_copy));
 	}
 
@@ -767,12 +781,18 @@ driver_base::~driver_base()
 	if (s)
 		SDL_FreeSurface(s);
 
+#if DIRECT_ADDRESSING || REAL_ADDRESSING
 	// the_buffer shall always be mapped through vm_acquire_framebuffer()
 	if (the_buffer != VM_MAP_FAILED) {
 		D(bug(" releasing the_buffer at %p (%d bytes)\n", the_buffer, the_buffer_size));
 		vm_release_framebuffer(the_buffer, the_buffer_size);
 		the_buffer = NULL;
 	}
+#else
+	if (the_buffer != VM_MAP_FAILED) {
+		free(the_buffer);
+	}
+#endif
 
 	// Free frame buffer(s)
 	if (!use_vosf) {

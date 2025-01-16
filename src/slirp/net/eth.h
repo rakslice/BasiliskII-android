@@ -304,10 +304,7 @@ eth_get_l2_hdr_length(const void *p)
     }
 }
 
-static inline size_t
-iov_to_buf(const struct iovec *iov, const unsigned int iov_cnt,
-           size_t offset, void *buf, size_t bytes);
-
+/*
 static inline uint32_t
 eth_get_l2_hdr_length_iov(const struct iovec *iov, int iovcnt)
 {
@@ -320,6 +317,7 @@ eth_get_l2_hdr_length_iov(const struct iovec *iov, int iovcnt)
 
     return eth_get_l2_hdr_length(p);
 }
+*/
 
 static inline uint16_t
 eth_get_pkt_tci(const void *p)

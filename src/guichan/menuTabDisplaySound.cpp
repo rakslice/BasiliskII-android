@@ -5,6 +5,8 @@
 #include <guichan.hpp>
 #include <iostream>
 #include <sstream>
+#include <vector>
+#include <SDL.h>
 #include <SDL/SDL_ttf.h>
 #include <guichan/sdl.hpp>
 #include "guichan/contrib/sdl/sdltruetypefont.hpp"
@@ -35,22 +37,98 @@ namespace widgets
   gcn::DropDown* dropDown_frameskip;
   gcn::CheckBox* checkBox_nosound;
 
-const char *screenMode_wlist[] = { "win/640/480", "win/800/600", "win/1024/600", "win/1024/768", "win/1280/800", "win/1366/768", "win/1920/1080"};
-const int screenModeNum = sizeof(screenMode_wlist) / sizeof(screenMode_wlist[0]);
-  
+struct ScreenModeEntry {
+  int w;
+  int h;
+};
+
+
+static SDL_Rect * getBestModeRect() {
+  SDL_Rect ** modes = SDL_ListModes(NULL, SDL_HWSURFACE);
+  if (modes != (SDL_Rect**) 0 && modes != (SDL_Rect**) -1) {
+    return *modes;
+  }
+  return NULL;
+}
+
+static std::string bestScreenModeValue(int i) {
+    SDL_Rect * mode = getBestModeRect();
+    return mode? ("win/" + std::to_string(mode->w/i) + "/" + std::to_string(mode->h/i)) : "";
+}
+
+static std::string bestScreenModeName(int i) {
+    SDL_Rect * mode = getBestModeRect();
+    return mode? (std::to_string(mode->w/i) + "x" + std::to_string(mode->h/i)) : "";
+}
+
+static bool compare_mode (const ScreenModeEntry & first, const ScreenModeEntry & second) {
+  if (first.w < second.w) return true;
+  if (first.w == second.w && first.h < second.h) return true;
+  return false;
+}
   class ScreenModeModel : public gcn::ListModel
   {
+    protected:
+      std::vector<ScreenModeEntry> screenMode_list = {{640, 480}, {800, 600}, {1024, 600}, {1024, 768}, {1280, 800}, {1366, 768}, {1920, 1080}};
+
+      bool haveMode(const ScreenModeEntry & mode) {
+        for (std::vector<ScreenModeEntry>::iterator i = screenMode_list.begin(); i != screenMode_list.end(); i++) {
+          if (i->w == mode.w && i->h == mode.h) {
+            return true;
+          }
+        }
+        return false;
+      }
+
     public:
+
+      void init() {
+        // add some even scales of the best resolution from SDL
+        SDL_Rect * mode = getBestModeRect();
+        if (mode) {
+          for (int scale = 1; scale <= 4; scale++) {
+            if (mode->w % scale != 0) continue;
+            if (mode->h % scale != 0) continue;
+            ScreenModeEntry scaled = {mode->w/scale, mode->h/scale};
+            if (scaled.w < 512) continue;
+            if (scaled.h < 384) continue;
+            if (!haveMode(scaled)) {
+              screenMode_list.push_back(scaled);
+            }
+          }
+        }
+
+        // sort the resolutions
+        std::sort(screenMode_list.begin(), screenMode_list.end(), compare_mode);
+      }
+
       int getNumberOfElements()
       {
-        return screenModeNum;
+        return screenMode_list.size();
       }
 
       std::string getElementAt(int i)
       {
-		const char *ScreenMode_list[] = { "640x480", "800x600", "1024x600", "1024x768", "1280x800", "1366x768", "1920x1080"};
-        return std::string(ScreenMode_list[i]);
+        // name
+        if (i < screenMode_list.size()) {
+          std::ostringstream temp;
+          temp << screenMode_list[i].w << "x" << screenMode_list[i].h;
+          return temp.str();
+        }
+        return "";
       }
+
+      std::string getElementPrefValueAt(int i)
+      {
+        // pref value
+        if (i < screenMode_list.size()) {
+          std::ostringstream temp;
+          temp << "win/" << screenMode_list[i].w << "/" << screenMode_list[i].h;
+          return temp.str();
+        }
+        return "";
+      }
+
   };
   ScreenModeModel screenModeList;
   
@@ -80,10 +158,10 @@ const int screenModeNum = sizeof(screenMode_wlist) / sizeof(screenMode_wlist[0])
       void action(const gcn::ActionEvent& actionEvent)
       {
         if (actionEvent.getSource() == dropDown_screenmode)
-		{
-			int selected=dropDown_screenmode->getSelected();
-			menu_screen=std::string(screenMode_wlist[selected]);
-		}
+        {
+          int selected=dropDown_screenmode->getSelected();
+          menu_screen=screenModeList.getElementPrefValueAt(selected);
+        }
       }
   };
   ScreenModeActionListener* screenModeActionListener;
@@ -123,6 +201,8 @@ const int screenModeNum = sizeof(screenMode_wlist) / sizeof(screenMode_wlist[0])
   
   void menuTabDisplaySound_Init()
   {
+    screenModeList.init();
+
   	label_screenmode = new gcn::Label("Screen Mode");
   	label_screenmode->setPosition(4, 2);
   	backgrd_screenmode = new gcn::Container();
@@ -194,8 +274,8 @@ const int screenModeNum = sizeof(screenMode_wlist) / sizeof(screenMode_wlist[0])
 
   void show_settings_TabDisplaySound()
   {
-    for(int i = 0; i < screenModeNum; i++) {
-	    if (menu_screen == screenMode_wlist[i])
+    for(int i = 0; i < screenModeList.getNumberOfElements(); i++) {
+	    if (menu_screen == screenModeList.getElementPrefValueAt(i))
 		    dropDown_screenmode->setSelected(i);
     }
 	dropDown_frameskip->setSelected(std::atoi(menu_frameskip.c_str()));

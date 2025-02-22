@@ -96,6 +96,19 @@ namespace sdl
 
   void run()
   {
+
+    int cursor_x = 0, cursor_y = 0;
+    bool cursor_show = false; // Draw a cursor (when there is non-touchscreen mouse motion)
+
+    bool joy_seen = false; // If there has ever been a JOY event, i.e. we don't need to process MOUSEMOTION events
+    bool joy_button_down = false; // For touchscreen simulated joy events, joy button down confirms there is a touch in progress
+
+    /*
+    Testing on a Fire OS device, in an app session where there is no touch screen used at all, all we get from the mosue is SDL_MOUSEMOTION and SDL_MOUSEBUTTONS.
+    If a touch happens, it generates both JOYBALL and MOUSE events, and after the second touch the mouse starts to produce both JOYBALL and MOUSE motion events
+    (but the mouse never produces JOYBUTTON events, only MOUSEBUTTON)
+    */
+
     // The main loop
     while(running)
     {
@@ -133,6 +146,7 @@ namespace sdl
           }
         }
 #ifdef ANDROIDSDL
+    static int x = 0, y = 0, buttons = 0;
 		/*
 		 * Now that we are done polling and using SDL events we pass
 		 * the leftovers to the SDLInput object to later be handled by
@@ -140,22 +154,37 @@ namespace sdl
 		 * label doesn't use input. But will do it anyway to show how to
 		 * set up an SDL application with Guichan.)
 		 */
-		if (event.type == SDL_MOUSEMOTION ||
-			event.type == SDL_MOUSEBUTTONDOWN ||
-			event.type == SDL_MOUSEBUTTONUP)
+
+		if (event.type == SDL_MOUSEMOTION)
 		{
-			// Filter emulated mouse events for Guichan, we wand absolute input
+      //__android_log_print(ANDROID_LOG_INFO, "GUICHAN","MOTION MOUSE which %d %d,%d btns %d joyseen %d", event.motion.which, event.motion.x, event.motion.y, event.motion.state, joy_seen);
+
+      if (!joy_seen) {
+        // If we have seen only mouse real mouse events maybe there is only mouse input
+        x = event.motion.x;
+        y = event.motion.y;
+        cursor_x = x;
+        cursor_y = y;
+        if (!joy_button_down) {
+          // definitely mouse motion
+          cursor_show = true;
+        }
+      } else {
+          // if there has been touch screen use, JOYBALLMOTION events are being simulated for the mouse so
+          // we do not need to process these ones
+          // Filter emulated mouse events for Guichan, we want absolute input
+      }
 		}
 		else
 		{
 			// Convert multitouch event to SDL mouse event
-			static int x = 0, y = 0, buttons = 0, wx=0, wy=0, pr=0;
 			SDL_Event event2;
 			memcpy(&event2, &event, sizeof(event));
 			if (event.type == SDL_JOYBALLMOTION &&
 				event.jball.which == 0 &&
 				event.jball.ball == 0)
 			{
+        joy_seen = true;
 				event2.type = SDL_MOUSEMOTION;
 				event2.motion.which = 0;
 				event2.motion.state = buttons;
@@ -168,26 +197,41 @@ namespace sdl
 				}
 				event2.motion.x = x;
 				event2.motion.y = y;
-				//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","Mouse motion %d %d btns %d", x, y, buttons);
+				//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","MOTION JOYBALL %d %d btns %d which %d", x, y, buttons, event.jball.which);
+        cursor_x = x; cursor_y = y;
+        if (!joy_button_down) {
+          // this is real mouse motion
+          cursor_show = true;
+        }
 				if (buttons == 0)
 				{
 					// Push mouse motion event first, then button down event
 					input->pushInput(event2);
-					buttons = SDL_BUTTON_LMASK;
+					buttons = SDL_BUTTON_LMASK; // local static buttons set indicates we have simulated a button going down for this touch already
 					event2.type = SDL_MOUSEBUTTONDOWN;
 					event2.button.which = 0;
 					event2.button.button = SDL_BUTTON_LEFT;
 					event2.button.state =  SDL_PRESSED;
 					event2.button.x = x;
 					event2.button.y = y;
-					//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","Mouse button %d coords %d %d", buttons, x, y);
+					//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","  Simulating mouse button %d coords %d %d", buttons, x, y);
 				}
-			}
-			if (event.type == SDL_JOYBUTTONUP &&
+			} else if (event.type == SDL_JOYBUTTONDOWN &&
+        event.jbutton.which == 0 &&
+        event.jbutton.button == 0) {
+          //__android_log_print(ANDROID_LOG_INFO, "GUICHAN","BUTTONS JOYBALL button down button %d coords %d %d", buttons, x, y);
+          joy_seen = true;
+          joy_button_down = true;
+          // this definitely could start a touch event, real mouse does not generate these
+          cursor_show = false;
+          continue;
+      } else if (event.type == SDL_JOYBUTTONUP &&
 				event.jbutton.which == 0 &&
 				event.jbutton.button == 0)
 			{
-				// Do not push button down event here, because we need mouse motion event first
+        joy_seen = true;
+        joy_button_down = false;
+				// Do not push button down event here, because we need mouse motion event first [???]
 				buttons = 0;
 				event2.type = SDL_MOUSEBUTTONUP;
 				event2.button.which = 0;
@@ -195,8 +239,24 @@ namespace sdl
 				event2.button.state = SDL_RELEASED;
 				event2.button.x = x;
 				event2.button.y = y;
-				//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","Mouse button %d coords %d %d", buttons, x, y);
-			}
+				//__android_log_print(ANDROID_LOG_INFO, "GUICHAN","BUTTONS JOYBALL button up button %d coords %d %d", buttons, x, y);
+			} else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+        //__android_log_print(ANDROID_LOG_INFO, "GUICHAN","BUTTONS MOUSE button %d coords %d %d joyseen %d", buttons, x, y, joy_seen);
+        if (!joy_button_down) {
+          // SDL_MouseButtonEvent event.button
+          buttons = event.button.button;
+          event2.type = event.type;
+          event2.button.which = event.button.which;
+          event2.button.button = event.button.button;
+          event2.button.state = event.button.state;
+          event2.button.x = x;
+          event2.button.y = y;
+        } else {
+          // if this is touch screen use, JOYBUTTON events are being simulated for it so
+          // we do not need to process these ones
+          continue;
+        }
+      }
 			input->pushInput(event2);
 		}
 #else
@@ -207,6 +267,35 @@ namespace sdl
       globals::gui->logic();
       // Now we let the Gui object draw itself.
       globals::gui->draw();
+
+      if (cursor_show) {
+        // draw a cursor
+        graphics->_beginDraw();
+
+        // white outline cursor
+        int h = 17;
+        int w = 13;
+        graphics->setColor(gcn::Color(0,0,0));
+        for (int y = 1; y < w; y++) {
+          graphics->drawLine(cursor_x + 1, cursor_y + y, cursor_x + y, cursor_y + y);
+        }
+        graphics->drawLine(cursor_x + 1, cursor_y + w, cursor_x + 6, cursor_y + w);
+
+        graphics->drawLine(cursor_x + 1, cursor_y + w + 1, cursor_x + 3, cursor_y + w + 1);
+        graphics->drawLine(cursor_x + 1, cursor_y + w + 2, cursor_x + 2, cursor_y + w + 2);
+        graphics->drawLine(cursor_x + 1, cursor_y + w + 3, cursor_x + 1, cursor_y + w + 3);
+
+        graphics->setColor(gcn::Color(255,255,255));
+        graphics->drawLine(cursor_x, cursor_y, cursor_x, cursor_y + w + 4);
+        graphics->drawLine(cursor_x, cursor_y, cursor_x + w, cursor_y + w);
+
+        graphics->drawLine(cursor_x, cursor_y + w + 4, cursor_x + 4, cursor_y + w + 1);
+        graphics->drawLine(cursor_x + 6, cursor_y + w, cursor_x + w, cursor_y + w);
+
+
+        graphics->_endDraw();
+      }
+
       // Finally we update the screen.
       SDL_Flip(GuiScreen);
     }

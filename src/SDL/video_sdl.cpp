@@ -1585,20 +1585,6 @@ static bool is_ctrl_down(SDL_keysym const & ks)
 	return ctrl_down || (ks.mod & KMOD_CTRL);
 }
 
-static int modify_opt_cmd(int code) {
-	static bool f, c;
-	if (!f) {
-		f = true;
-		c = PrefsFindBool("swap_opt_cmd");
-	}
-	if (c) {
-		switch (code) {
-			case 0x37: return 0x3a;
-			case 0x3a: return 0x37;
-		}
-	}
-	return code;
-}
 
 /*
  *  Translate key event to Mac keycode, returns -1 if no keycode was found
@@ -1674,10 +1660,17 @@ static int kc_decode(SDL_keysym const & ks, bool key_down)
 	case SDLK_RCTRL: return 0x36;
 	case SDLK_LSHIFT: return 0x38;
 	case SDLK_RSHIFT: return 0x38;
+#if (defined(__APPLE__) && defined(__MACH__))
 	case SDLK_LALT: return 0x3a;
 	case SDLK_RALT: return 0x3a;
 	case SDLK_LMETA: return 0x37;
 	case SDLK_RMETA: return 0x37;
+#else
+	case SDLK_LALT: return 0x37;
+	case SDLK_RALT: return 0x37;
+	case SDLK_LMETA: return 0x3a;
+	case SDLK_RMETA: return 0x3a;
+#endif
 	case SDLK_LSUPER: return 0x3a; // "Windows" key
 	case SDLK_RSUPER: return 0x3a;
 	case SDLK_MENU: return 0x32;
@@ -1818,7 +1811,6 @@ static void handle_events(void)
 					code = event2keycode(event.key, true);
 				if (code >= 0) {
 					if (!emul_suspended) {
-						code = modify_opt_cmd(code);
 						if (code == 0x39) {	// Caps Lock pressed
 							if (caps_on) {
 								ADBKeyUp(code);
@@ -1846,7 +1838,6 @@ static void handle_events(void)
 				} else
 					code = event2keycode(event.key, false);
 				if (code >= 0) {
-					code = modify_opt_cmd(code);
 					if (code == 0x39) {	// Caps Lock released
 						if (caps_on) {
 							ADBKeyUp(code);

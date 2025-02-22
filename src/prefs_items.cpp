@@ -68,7 +68,6 @@ prefs_desc common_prefs_items[] = {
 	{"jitinline", TYPE_BOOLEAN, false,   "enable translation through constant jumps"},
 	{"jitblacklist", TYPE_STRING, false, "blacklist opcodes from translation"},
 	{"keyboardtype", TYPE_INT32, false, "hardware keyboard type"},
-	{"swap_opt_cmd", TYPE_BOOLEAN, false,   "swap option and command key"},
 	{NULL, TYPE_END, false, NULL} // End of list
 };
 
